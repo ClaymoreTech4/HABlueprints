@@ -22,14 +22,13 @@ blueprint:
           domain: input_text
     update_teamtracker_sensor:
       name: How often the Team Tracker Senesor
-      description: This sets how often the Team Tracker Sensor should update, when the game is playing (State = "IN")
+      description: This sets how often the Team Tracker Sensor should update, when the game is playing (State = "IN") Every 10 to 59 seconds
       default: 30
       selector:
         number:
           min: 10
-          max: 60
-          mode: slider
-          step: 1.0
+          max: 59
+          mode: box
     game_start_actions:
       name: Game Starts Actions
       description: >
@@ -89,6 +88,7 @@ action:
   - parallel:
 
       - sequence:
+          - delay: !input update_teamtracker_sensor
           - action: homeassistant.reload_config_entry
             target:
               entity_id: !input team_sensor
