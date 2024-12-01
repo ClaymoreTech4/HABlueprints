@@ -67,7 +67,7 @@ action:
       - sequence:
           - action: homeassistant.reload_config_entry
             target:
-              entity_id: sensor.michigan_football
+              entity_id: !input team_sensor
             data: {}
 
       - choose:
