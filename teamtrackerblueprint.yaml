@@ -20,6 +20,16 @@ blueprint:
       selector:
         entity:
           domain: input_text
+    update_teamtracker_sensor:
+      name: How often the Team Tracker Senesor
+      description: This sets how often the Team Tracker Sensor should update, when the game is playing (State = "IN")
+      default: 30
+      selector:
+        number:
+          min: 10
+          max: 60
+          mode: slider
+          step: 1.0
     game_start_actions:
       name: Game Starts Actions
       description: >
@@ -65,7 +75,7 @@ blueprint:
 
 trigger:
   - platform: time_pattern
-    seconds: "/10"
+    seconds: !input update_teamtracker_sensor
   - platform: state
     entity_id: !input team_sensor
 
