@@ -1,0 +1,166 @@
+blueprint:
+  name: Team Score Management
+  description: >
+    Manages team score updates, detects scoring events, and updates scores for
+    active games dynamically. Allows adding additional actions after each condition.
+  domain: automation
+  input:
+    team_sensor:
+      name: Team Sensor
+      description: >
+        The sensor entity tracking the team's state and score (e.g., sensor.lions_football).
+      selector:
+        entity:
+          integration: teamtracker
+          multiple: false
+    score_input_select:
+      name: Score Input Select
+      description: >
+        The input_select entity for displaying the type of score (e.g., Touchdown, Extra Point), This can be used for conditions on the conditional card to change your dashboard.
+      selector:
+        entity:
+          domain: input_select
+    touchdown_actions:
+      name: Touchdown Actions
+      description: >
+        A sequence of actions to perform after Touchdown.
+      default: []
+      selector:
+        action: {}
+    extra_point_actions:
+      name: Extra Point Actions
+      description: >
+        A sequence of actions to perform after Extra Point.
+      default: []
+      selector:
+        action: {}
+    safety_2_point_conversion_actions:
+      name: Safety or 2 Point Conversion Actions
+      description: >
+        A sequence of actions to perform after Safety or 2 Point Conversion.
+      default: []
+      selector:
+        action: {}
+    field_goal_actions:
+      name: Field Goal Actions
+      description: >
+        A sequence of actions to perform after Field Goal.
+      default: []
+      selector:
+        action: {}
+
+trigger:
+  - platform: time_pattern
+    seconds: "/10"
+  - platform: state
+    entity_id: !input team_sensor
+
+condition:
+  - condition: state
+    entity_id: !input team_sensor
+    state: "IN"
+
+
+action:
+  - parallel:
+
+      - sequence:
+          - action: homeassistant.reload_config_entry
+            target:
+              entity_id: sensor.michigan_football
+            data: {}
+
+      - choose:
+          # Detect scoring events
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ trigger.to_state.state != trigger.from_state.state }}
+            sequence:
+              - choose:
+                  - conditions:
+                      # Touchdown
+                      - condition: template
+                        value_template: >
+                          {{ (trigger.to_state.attributes.team_score | int) - 
+                          (trigger.from_state.attributes.team_score | int) == 6 }}
+                    sequence:
+                      - parallel:
+                          - sequence:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: Touchdown
+                              - delay: "00:00:30"
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: None
+                          - sequence: !input touchdown_actions
+                  - conditions:
+                      # Extra Point
+                      - condition: template
+                        value_template: >
+                          {{ (trigger.to_state.attributes.team_score | int) - 
+                          (trigger.from_state.attributes.team_score | int) == 1 }}
+                    sequence:
+                      - parallel:
+                          - sequence:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: Extra Point
+                              - delay: "00:00:30"
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: None
+                          - sequence: !input extra_point_actions
+                  - conditions:
+                      # Safety or 2 Point Conversion
+                      - condition: template
+                        value_template: >
+                          {{ (trigger.to_state.attributes.team_score | int) - 
+                          (trigger.from_state.attributes.team_score | int) == 2 }}
+                    sequence:
+                      - parallel:
+                          - sequence:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: Safety / 2 Point Conversion
+                              - delay: "00:00:30"
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: None
+                          - sequence: !input safety_2_point_conversion_actions
+                  - conditions:
+                      # Field Goal
+                      - condition: template
+                        value_template: >
+                          {{ (trigger.to_state.attributes.team_score | int) - 
+                          (trigger.from_state.attributes.team_score | int) == 3 }}
+                    sequence:
+                      - parallel:
+                          - sequence:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: Field Goal
+                              - delay: "00:00:30"
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input score_input_select
+                                data:
+                                  option: None
+                          - sequence: !input field_goal_actions
+
+mode: parallel
