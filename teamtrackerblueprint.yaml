@@ -16,23 +16,14 @@ blueprint:
     score_input_text:
       name: Score Input Text
       description: >
-        The input_select entity for displaying the type of score (e.g., Touchdown, Extra Point), This can be used for conditions on the conditional card to change your dashboard.
+        The input_text entity for displaying the type of score (e.g., Touchdown, Extra Point). This can be used for conditions on the conditional card to change your dashboard.
       selector:
         entity:
           domain: input_text
-    update_teamtracker_sensor:
-      name: How often the Team Tracker Senesor
-      description: This sets how often the Team Tracker Sensor should update, when the game is playing (State = "IN") Every 10 to 59 seconds
-      default: 30
-      selector:
-        number:
-          min: 10
-          max: 59
-          mode: box
     game_start_actions:
       name: Game Starts Actions
       description: >
-        A sequence of actions to perform after game starts.
+        A sequence of actions to perform after the game starts.
       default: []
       selector:
         action: {}
@@ -46,35 +37,33 @@ blueprint:
     touchdown_actions:
       name: Touchdown Actions
       description: >
-        A sequence of actions to perform after Touchdown.
+        A sequence of actions to perform after a touchdown.
       default: []
       selector:
         action: {}
     extra_point_actions:
       name: Extra Point Actions
       description: >
-        A sequence of actions to perform after Extra Point.
+        A sequence of actions to perform after an extra point.
       default: []
       selector:
         action: {}
     safety_2_point_conversion_actions:
       name: Safety or 2 Point Conversion Actions
       description: >
-        A sequence of actions to perform after Safety or 2 Point Conversion.
+        A sequence of actions to perform after a safety or 2-point conversion.
       default: []
       selector:
         action: {}
     field_goal_actions:
       name: Field Goal Actions
       description: >
-        A sequence of actions to perform after Field Goal.
+        A sequence of actions to perform after a field goal.
       default: []
       selector:
         action: {}
 
 trigger:
-  - platform: time_pattern
-    seconds: !input update_teamtracker_sensor
   - platform: state
     entity_id: !input team_sensor
 
@@ -82,150 +71,111 @@ condition:
   - condition: state
     entity_id: !input team_sensor
     state: "IN"
-
-
 action:
   - parallel:
-
-      - sequence:
-          - delay: !input update_teamtracker_sensor
-          - action: homeassistant.reload_config_entry
-            target:
-              entity_id: !input team_sensor
-            data: {}
-
+      # Handle Game Start
       - choose:
-          # Detect scoring events
           - conditions:
               - condition: template
                 value_template: >
-                  {{ trigger.to_state.state != trigger.from_state.state }}
+                  {{ trigger.to_state.state == "IN" and trigger.from_state.state == "PRE" }}
             sequence:
+              - sequence: !input game_start_actions
+              - action: input_text.set_value
+                data:
+                  value: Game Starting
+                target:
+                  entity_id: !input score_input_text
+              - delay: "00:00:30"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input score_input_text
+                data:
+                  value: None
+    # Handle each football scoring case in a choose statement
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: '{{ trigger.to_state.attributes.sport == "football" and (trigger.to_state.attributes.team_score | int - trigger.from_state.attributes.team_score | int == 1) }}'
+            sequence:
+              - sequence: !input extra_point_actions
+              - action: input_text.set_value
+                data:
+                  value: Extra Point
+                target:
+                  entity_id: !input score_input_text
+              - delay: "00:00:30"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input score_input_text
+                data:
+                  value: None
+          - conditions:
+              - condition: template
+                value_template: '{{ trigger.to_state.attributes.sport == "football" and (trigger.to_state.attributes.team_score | int - trigger.from_state.attributes.team_score | int == 6) }}'
+            sequence:
+              - sequence: !input touchdown_actions
+              - action: input_text.set_value
+                data:
+                  value: Touchdown
+                target:
+                  entity_id: !input score_input_text
+              - delay: "00:00:30"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input score_input_text
+                data:
+                  value: None
+          - conditions:
+              - condition: template
+                value_template: '{{ trigger.to_state.attributes.sport == "football" and (trigger.to_state.attributes.team_score | int - trigger.from_state.attributes.team_score | int == 2) }}'
+            sequence:
+              - sequence: !input safety_2_point_conversion_actions
+              - action: input_text.set_value
+                data:
+                  value: Safety / 2 Point Conversion
+                target:
+                  entity_id: !input score_input_text
+              - delay: "00:00:30"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input score_input_text
+                data:
+                  value: None
+          - conditions:
+              - condition: template
+                value_template: '{{ trigger.to_state.attributes.sport == "football" and (trigger.to_state.attributes.team_score | int - trigger.from_state.attributes.team_score | int == 3) }}'
+            sequence:
+              - sequence: !input field_goal_actions
+              - action: input_text.set_value
+                data:
+                  value: Field Goal
+                target:
+                  entity_id: !input score_input_text
+              - delay: "00:00:30"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input score_input_text
+                data:
+                  value: None
+             # Handle All Other Scores
               - choose:
                   - conditions:
-                      # Game Starting
                       - condition: template
-                        value_template: >
-                          {{ trigger.to_state.state == "IN" and trigger.from_state.state == "PRE" }}
+                        value_template: '{{ trigger.to_state.attributes.team_score | int != trigger.from_state.attributes.team_score | int }}'
                     sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Game Starting
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input game_start_actions
-                  - conditions:
-                      # Any Score
-                      - condition: template
-                        value_template: >
-                          {{ (trigger.to_state.attributes.team_score | int) - 
-                          (trigger.from_state.attributes.team_score | int) >= 1 }}
-                    sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Scored
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input scored_actions
-                  - conditions:
-                      # Touchdown
-                      - condition: template
-                        value_template: >
-                          {{ (trigger.to_state.attributes.team_score | int) - 
-                          (trigger.from_state.attributes.team_score | int) == 6 }}
-                    sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Touchdown
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input touchdown_actions
-                  - conditions:
-                      # Extra Point
-                      - condition: template
-                        value_template: >
-                          {{ (trigger.to_state.attributes.team_score | int) - 
-                          (trigger.from_state.attributes.team_score | int) == 1 }}
-                    sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Extra Point
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input extra_point_actions
-                  - conditions:
-                      # Safety or 2 Point Conversion
-                      - condition: template
-                        value_template: >
-                          {{ (trigger.to_state.attributes.team_score | int) - 
-                          (trigger.from_state.attributes.team_score | int) == 2 }}
-                    sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Safety / 2 Point Conversion
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input safety_2_point_conversion_actions
-                  - conditions:
-                      # Field Goal
-                      - condition: template
-                        value_template: >
-                          {{ (trigger.to_state.attributes.team_score | int) - 
-                          (trigger.from_state.attributes.team_score | int) == 3 }}
-                    sequence:
-                      - parallel:
-                          - sequence:
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: Field Goal
-                              - delay: "00:00:30"
-                              - service: input_text.set_value
-                                target:
-                                  entity_id: !input score_input_text
-                                data:
-                                  option: None
-                          - sequence: !input field_goal_actions
+                       # Handle any type of score.
+                      - sequence: !input scored_actions
+                      - action: input_text.set_value
+                        data:
+                          value: Scored
+                        target:
+                          entity_id: !input score_input_text
+                      - delay: "00:00:30"
+                      - action: input_text.set_value
+                        target:
+                          entity_id: !input score_input_text
+                        data:
+                          value: None
 
-mode: parallel
+mode: single
